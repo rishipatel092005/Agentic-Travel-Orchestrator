@@ -374,4 +374,4 @@ Multi-service orchestration and resilience patterns
 Real-world constraint handling (budgets, time, availability)
 
 Author: Rishi Patel
-Repository: [rishipatel092005/Agentic-Travel-Orchestrator]
+Repository: github.com/rishipatel092005/Agentic-Travel-Orchestrator
