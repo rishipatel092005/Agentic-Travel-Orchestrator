@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 from pydantic import BaseModel, Field
+from langgraph.errors import GraphRecursionError
 
 # Allow the compatibility route to reuse the existing root-level agent package.
 project_root = Path(__file__).resolve().parents[2]
@@ -211,6 +212,12 @@ async def query_travel_agent(query: QueryRequest):
         return {"answer": answer}
     except HTTPException:
         raise
+    except GraphRecursionError:
+        logger.exception("Travel agent workflow exceeded its iteration limit")
+        raise HTTPException(
+            status_code=504,
+            detail="The travel agent needed more tool steps than allowed. Please try a shorter or more specific request.",
+        )
     except Exception as error:
         logger.exception("Travel agent request failed")
         if "429" in str(error) or "rate_limit" in str(error).lower():

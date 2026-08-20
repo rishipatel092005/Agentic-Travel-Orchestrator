@@ -12,8 +12,8 @@ from tools.expense_calculator_tool import CalculatorTool
 from tools.currency_conversion_tool import CurrencyConverterTool
 
 logger = logging.getLogger(__name__)
-MAX_WORKFLOW_ITERATIONS = 2
-WORKFLOW_RECURSION_LIMIT = 1 + (MAX_WORKFLOW_ITERATIONS * 2)
+MAX_WORKFLOW_ITERATIONS = 3
+WORKFLOW_RECURSION_LIMIT = 20
 
 
 class GraphBuilder:
@@ -55,7 +55,6 @@ class GraphBuilder:
         graph_builder.add_edge(START,"agent")
         graph_builder.add_conditional_edges("agent",tools_condition)
         graph_builder.add_edge("tools","agent")
-        graph_builder.add_edge("agent",END)
         self.graph = graph_builder.compile()
         return self.graph
         

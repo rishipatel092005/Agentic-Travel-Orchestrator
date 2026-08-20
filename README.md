@@ -366,7 +366,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/trips/validate `
 - Container deployment (Docker and Kubernetes manifests)
 - Batch processing for enterprise travel management
 
-## About
+## 👨‍💼 About
 
 Autonomous agent design with LangGraph
 Deterministic business logic separation
