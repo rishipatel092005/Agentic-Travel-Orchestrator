@@ -1,0 +1,432 @@
+BACKEND FILE QUICK REFERENCE
+============================
+
+This file provides quick access to all backend files with their exact paths and line counts.
+
+
+DIRECTORY STRUCTURE
+===================
+
+backend/
+├── app/
+│   ├── __init__.py                    # 4 lines | Package version
+│   ├── main.py                        # 250 lines | FastAPI application
+│   ├── config.py                      # 47 lines | Pydantic settings
+│   ├── database.py                    # 70 lines | MongoDB connection
+│   ├── models/
+│   │   ├── __init__.py               # 8 lines | Model imports
+│   │   ├── trip.py                   # 110 lines | TripRequest validation
+│   │   └── itinerary.py              # 240 lines | Itinerary models
+│   └── services/
+│       ├── __init__.py               # 6 lines | Service imports
+│       ├── budget_engine.py          # 220 lines | Cost calculations
+│       └── evaluation.py             # 320 lines | Scoring system
+├── .env                              # Environment variables
+├── .env.example                      # Environment template
+├── README.md                         # Documentation
+├── TESTING_GUIDE.txt                 # Testing instructions
+└── SETUP_COMPLETE.txt                # This file
+
+
+FILE DESCRIPTIONS & RESPONSIBILITIES
+====================================
+
+1. backend/app/__init__.py
+   ──────────────────────────
+   Lines: 4
+   Purpose: Package initialization marker
+   Contains: Version info (__version__ = "0.1.0")
+   
+   Key Elements:
+   - __version__ = "0.1.0"
+   
+   Imports: None
+   Exports: Nothing (marker file)
+   
+   When to edit: Update version number in new releases
+
+
+2. backend/app/config.py
+   ────────────────────────
+   Lines: 47
+   Purpose: Environment configuration management
+   Uses: pydantic-settings
+   
+   Key Elements:
+   - Settings class (inherits BaseSettings)
+   - MONGODB_URI: str
+   - groq_api_key: Optional[str]
+   - tavily_api_key: Optional[str]
+   - openweathermap_api_key: Optional[str]
+   - gplaces_api_key: Optional[str]
+   - exchange_rate_api_key: Optional[str]
+   - debug: bool
+   - app_name: str
+   - settings: Global Settings instance
+   
+   Imports: pydantic_settings.BaseSettings
+   Exports: settings (instance)
+   
+   When to edit: Add new environment variables
+
+
+3. backend/app/database.py
+   ────────────────────────
+   Lines: 70
+   Purpose: MongoDB connection and collection access
+   Uses: pymongo
+   
+   Key Elements:
+   - Database class (singleton pattern)
+   - Connection with timeout handling
+   - Properties: users_collection, trips_collection, itineraries_collection
+   - Methods: close(), is_connected()
+   - db: Global Database instance
+   
+   Imports: pymongo.MongoClient, pymongo.errors, app.config.settings
+   Exports: db (instance)
+   
+   When to edit: Add new collections or connection logic
+
+
+4. backend/app/models/trip.py
+   ───────────────────────────
+   Lines: 110
+   Purpose: Trip request validation model
+   Uses: pydantic
+   
+   Key Elements:
+   - TripRequest class (BaseModel)
+   - destination: str (required)
+   - days: int (required, 1-365)
+   - travelers: int (required, 1-50)
+   - budget: float (required, > 0)
+   - interests: List[str] (required, 1-20 items)
+   - max_daily_travel_minutes: int (optional, default 180, 30-1440)
+   - Validators: destination, interests, budget
+   
+   Imports: pydantic.BaseModel, Field, field_validator, typing.List
+   Exports: TripRequest class
+   
+   When to edit: Add new trip request fields or validation rules
+
+
+5. backend/app/models/itinerary.py
+   ───────────────────────────────
+   Lines: 240
+   Purpose: Itinerary structure models
+   Uses: pydantic
+   
+   Key Elements:
+   - Activity class: name, category, cost, outdoor, lat/lon, duration
+   - DayPlan class: day number, activities list, daily cost, notes
+   - Itinerary class: destination, day plans, cost breakdown
+   
+   Imports: pydantic.BaseModel, Field, typing.List, Optional
+   Exports: Activity, DayPlan, Itinerary classes
+   
+   When to edit: Add new fields to activities or itineraries
+
+
+6. backend/app/services/budget_engine.py
+   ──────────────────────────────────────
+   Lines: 220
+   Purpose: Deterministic cost calculations
+   Uses: pydantic (for result models)
+   
+   Key Elements:
+   - BudgetValidationResult class
+   - BudgetEngine class with methods:
+     - calculate_meal_cost()
+     - calculate_accommodation_cost()
+     - calculate_transportation_cost()
+     - calculate_activity_cost()
+     - calculate_itinerary_cost()
+     - validate_budget()
+     - optimize_activity_costs()
+   
+   Constants:
+   - DEFAULT_MEAL_COST_PER_DAY = 60.0
+   - DEFAULT_ACCOMMODATION_COST_PER_NIGHT = 100.0
+   - DEFAULT_TRANSPORTATION_COST_PER_DAY = 20.0
+   - CONTINGENCY_PERCENTAGE = 0.10
+   
+   Imports: pydantic, typing, app.models.itinerary
+   Exports: BudgetEngine, BudgetValidationResult
+   
+   When to edit: Adjust default costs or add new cost categories
+
+
+7. backend/app/services/evaluation.py
+   ───────────────────────────────────
+   Lines: 320
+   Purpose: Multi-dimensional itinerary scoring
+   Uses: pydantic, ClassVar for v2 compatibility
+   
+   Key Elements:
+   - EvaluationScore class with ClassVar WEIGHTS
+   - EvaluationService class with methods:
+     - evaluate_budget_score()
+     - evaluate_preference_score()
+     - evaluate_activity_diversity_score()
+     - evaluate_itinerary()
+     - should_replan()
+     - get_improvement_recommendations()
+   
+   Weights (ClassVar):
+   - budget: 0.30
+   - preferences: 0.25
+   - weather: 0.20
+   - travel_efficiency: 0.15
+   - activity_diversity: 0.10
+   
+   Imports: pydantic, typing.ClassVar/Dict/List/Optional, app.models.itinerary
+   Exports: EvaluationScore, EvaluationService
+   
+   When to edit: Adjust scoring weights or add new evaluation dimensions
+
+
+8. backend/app/main.py
+   ────────────────────
+   Lines: 250
+   Purpose: FastAPI application and HTTP endpoints
+   Uses: fastapi, pydantic, logging
+   
+   Key Elements:
+   - FastAPI app instance
+   - CORS middleware
+   - Endpoints:
+     - GET / : Root endpoint
+     - GET /health : Health check
+     - POST /api/trips/validate : Trip validation
+   - Service initialization
+   - Error handling
+   
+   Imports: All models and services from app package
+   Exports: app (FastAPI instance)
+   
+   When to edit: Add new endpoints or modify validation logic
+
+
+DEPENDENCY CHAIN
+================
+
+Entry Point: backend/app/main.py
+  ↓
+  ├── from app.config import settings
+  │   └── from pydantic_settings import BaseSettings
+  │
+  ├── from app.database import db
+  │   ├── from pymongo import MongoClient
+  │   └── from app.config import settings
+  │
+  ├── from app.models.trip import TripRequest
+  │   └── from pydantic import BaseModel, Field, field_validator
+  │
+  ├── from app.models.itinerary import Itinerary, DayPlan
+  │   └── from pydantic import BaseModel, Field
+  │
+  ├── from app.services.budget_engine import BudgetEngine
+  │   ├── from pydantic import BaseModel, Field
+  │   └── from app.models.itinerary import Itinerary, DayPlan, Activity
+  │
+  └── from app.services.evaluation import EvaluationService
+      ├── from pydantic import BaseModel, Field
+      ├── from typing import ClassVar, Dict, List, Optional
+      └── from app.models.itinerary import Itinerary, Activity
+
+
+CRITICAL IMPORTS TO VERIFY
+===========================
+
+If you see import errors, check these first:
+
+1. Pydantic v2 Compatibility
+   - Use: from pydantic import BaseModel, Field, field_validator
+   - NOT: from pydantic import validator
+   - ClassVar must be imported for class-level constants
+
+2. Absolute imports (no relative imports)
+   - USE: from app.config import settings
+   - NOT: from .config import settings
+   - This allows running from any directory within backend/
+
+3. Optional types
+   - USE: from typing import Optional
+   - Then: Optional[str] instead of str | None
+
+4. All imports must exist:
+   - pydantic ✓
+   - pydantic-settings ✓
+   - pymongo ✓
+   - fastapi ✓
+   - python-dotenv ✓ (for .env loading)
+
+
+ENVIRONMENT VARIABLES
+=====================
+
+File: backend/.env
+
+Required variables (if using MongoDB):
+  MONGODB_URI=mongodb://localhost:27017
+
+Optional variables (can be empty for development):
+  GROQ_API_KEY=
+  TAVILY_API_KEY=
+  OPENWEATHERMAP_API_KEY=
+  GPLACES_API_KEY=
+  EXCHANGE_RATE_API_KEY=
+
+Application settings:
+  DEBUG=True
+  APP_NAME=Agentic Travel Planner
+
+Note: All variables have defaults, none cause failures if missing
+
+
+RUNNING THE BACKEND
+===================
+
+Command (from backend directory):
+  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+Alternative:
+  cd backend
+  uvicorn app.main:app --reload
+
+API endpoints will be available at:
+  - http://localhost:8000/docs (Swagger UI)
+  - http://localhost:8000/redoc (ReDoc)
+  - http://localhost:8000/health (Health check)
+  - POST http://localhost:8000/api/trips/validate (Trip validation)
+
+
+TESTING THE BACKEND
+===================
+
+1. Health Check
+   curl http://localhost:8000/health
+
+2. Trip Validation (Basic)
+   curl -X POST http://localhost:8000/api/trips/validate \
+     -H "Content-Type: application/json" \
+     -d '{
+       "destination": "Paris",
+       "days": 5,
+       "travelers": 2,
+       "budget": 3000.0,
+       "interests": ["culture", "food"]
+     }'
+
+3. More examples in: backend/TESTING_GUIDE.txt
+
+
+DEBUGGING TIPS
+==============
+
+1. Import Test (from backend directory)
+   python -c "from app.config import settings; print('✓')"
+
+2. Start with verbose logging
+   python -m uvicorn app.main:app --reload --log-level debug
+
+3. Check Python path
+   cd backend && python -c "import sys; print(sys.path)"
+
+4. Verify .env file
+   python -c "from app.config import settings; print(settings.database_name)"
+
+5. Test individual services
+   python
+   >>> from app.services.budget_engine import BudgetEngine
+   >>> engine = BudgetEngine()
+   >>> print(engine.calculate_meal_cost(5, 2))  # Should print 600.0
+   >>> exit()
+
+
+COMMON FILE EDITS
+=================
+
+To add a new field to TripRequest:
+  1. Edit: backend/app/models/trip.py
+  2. Add field with type hint and Field()
+  3. Add validator if needed
+
+To add a new endpoint:
+  1. Edit: backend/app/main.py
+  2. Add @app.get() or @app.post() decorated function
+  3. Import any needed models/services
+
+To adjust costs:
+  1. Edit: backend/app/services/budget_engine.py
+  2. Change constants like DEFAULT_MEAL_COST_PER_DAY
+  3. Update docstring with new values
+
+To change scoring weights:
+  1. Edit: backend/app/services/evaluation.py
+  2. Update WEIGHTS dictionary in EvaluationScore
+  3. Note: Must sum to 1.0
+  4. Update evaluation methods to use new weights
+
+To add new API key:
+  1. Edit: backend/app/config.py
+  2. Add new field: your_new_key: Optional[str] = None
+  3. It will auto-load from .env
+
+To add new collection:
+  1. Edit: backend/app/database.py
+  2. Add property: @property def your_collection(self): return self._db["your_collection"]
+  3. Use in main.py as needed
+
+
+FILE CHECKLIST FOR COMPLETION
+==============================
+
+✓ backend/__init__.py                 # Not needed (app/ is the package)
+✓ backend/app/__init__.py             # ✓ Created
+✓ backend/app/main.py                 # ✓ Created
+✓ backend/app/config.py               # ✓ Created
+✓ backend/app/database.py             # ✓ Created
+✓ backend/app/models/__init__.py      # ✓ Created
+✓ backend/app/models/trip.py          # ✓ Created
+✓ backend/app/models/itinerary.py     # ✓ Created
+✓ backend/app/services/__init__.py    # ✓ Created
+✓ backend/app/services/budget_engine.py # ✓ Created
+✓ backend/app/services/evaluation.py  # ✓ Created
+✓ backend/.env                        # ✓ Created
+✓ backend/.env.example                # ✓ Created
+✓ backend/README.md                   # ✓ Created
+✓ backend/TESTING_GUIDE.txt           # ✓ Created
+✓ backend/SETUP_COMPLETE.txt          # ✓ Created
+✓ requirements.txt                    # ✓ Updated
+
+
+TOTAL FILES CREATED: 15
+TOTAL LINES OF CODE: ~1,500
+TOTAL DOCUMENTATION: 1,000+ lines
+
+
+ERROR REFERENCE QUICK LOOKUP
+=============================
+
+Error: ModuleNotFoundError: No module named 'app'
+  Fix: cd backend (run from backend directory)
+
+Error: MongoDB connection refused
+  Fix: MongoDB not running (OK, app works offline)
+
+Error: .env file not found
+  Fix: Create backend/.env file (copy from .env.example)
+
+Error: Pydantic validation errors
+  Fix: Check field types in TripRequest model
+
+Error: Port 8000 already in use
+  Fix: Use different port with --port 8001
+
+Error: Import from pydantic._internal
+  Fix: Make sure pydantic==2.5.0 is installed
+
+Error: ClassVar not found
+  Fix: Update evaluation.py import to include ClassVar from typing

@@ -1,0 +1,375 @@
+"""
+Backend Backend Testing Guide
+
+This file provides instructions for testing the Agentic Travel Planner backend.
+"""
+
+# ============================================================================
+# PART 1: BACKEND STARTUP
+# ============================================================================
+
+## From the root directory:
+cd backend
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Expected output:
+# INFO:     Uvicorn running on http://0.0.0.0:8000
+# INFO:     Application startup complete
+
+
+# ============================================================================
+# PART 2: VERIFY HEALTH ENDPOINT
+# ============================================================================
+
+## Test 1: Health Check (No Database)
+curl http://localhost:8000/health
+
+# Expected response:
+# {
+#   "status": "healthy",
+#   "application": "Agentic Travel Planner",
+#   "version": "0.1.0",
+#   "database": "disconnected"
+# }
+
+
+# ============================================================================
+# PART 3: VALIDATE TRIP ENDPOINT - BASIC REQUEST
+# ============================================================================
+
+## Test 2: Simple Paris Trip (within budget)
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Paris",
+    "days": 5,
+    "travelers": 2,
+    "budget": 3000.0,
+    "interests": ["culture", "food", "history"],
+    "max_daily_travel_minutes": 180
+  }'
+
+# Expected: 200 OK with detailed budget analysis
+
+
+# ============================================================================
+# PART 4: EDGE CASES & VALIDATION TESTING
+# ============================================================================
+
+## Test 3: Trip over budget (should flag concern)
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Tokyo",
+    "days": 7,
+    "travelers": 1,
+    "budget": 500.0,
+    "interests": ["culture"],
+    "max_daily_travel_minutes": 120
+  }'
+
+# Expected: budget_score will be lower, over_budget: true
+
+
+## Test 4: Invalid destination (empty)
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "",
+    "days": 5,
+    "travelers": 2,
+    "budget": 3000.0,
+    "interests": ["culture"]
+  }'
+
+# Expected: 422 Unprocessable Entity - validation error
+
+
+## Test 5: Negative days (should fail)
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Paris",
+    "days": -1,
+    "travelers": 2,
+    "budget": 3000.0,
+    "interests": ["culture"]
+  }'
+
+# Expected: 422 Unprocessable Entity
+
+
+## Test 6: Empty interests (should fail)
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Paris",
+    "days": 5,
+    "travelers": 2,
+    "budget": 3000.0,
+    "interests": []
+  }'
+
+# Expected: 422 Unprocessable Entity
+
+
+## Test 7: Very high budget (should pass)
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Dubai",
+    "days": 3,
+    "travelers": 4,
+    "budget": 50000.0,
+    "interests": ["luxury", "shopping", "beaches"]
+  }'
+
+# Expected: within_budget: true, percentage_used: low
+
+
+## Test 8: Multiple interests (should be normalized)
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Bangkok",
+    "days": 4,
+    "travelers": 1,
+    "budget": 1500.0,
+    "interests": ["CULTURE", "Food", "adventure", "CULTURE", "Food"],
+    "max_daily_travel_minutes": 240
+  }'
+
+# Expected: interests deduplicated and lowercased
+
+
+# ============================================================================
+# PART 5: ROOT ENDPOINT
+# ============================================================================
+
+## Test 9: Root endpoint
+curl http://localhost:8000/
+
+# Expected:
+# {
+#   "message": "Welcome to Agentic Travel Planner API",
+#   "endpoints": {
+#     "health": "/health",
+#     "validate_trip": "POST /api/trips/validate"
+#   },
+#   "documentation": "/docs"
+# }
+
+
+# ============================================================================
+# PART 6: INTERACTIVE SWAGGER DOCUMENTATION
+# ============================================================================
+
+# Open browser to: http://localhost:8000/docs
+# 
+# You can:
+# - See all available endpoints
+# - View request/response schemas
+# - Try endpoints directly from the browser
+# - Test with example data
+
+
+# ============================================================================
+# PART 7: COST CALCULATION VERIFICATION
+# ============================================================================
+
+## Understanding Cost Breakdown:
+
+# For a 5-day trip with 2 travelers and defaults:
+# - Meal cost: $60/day/person × 5 days × 2 travelers = $600
+# - Accommodation: $100/night/person × 4 nights × 2 travelers = $800
+#   (nights = days - 1, so 5 days = 4 nights)
+# - Transportation: $20/day/person × 5 days × 2 travelers = $200
+# - Activity cost: $0 (no activities provided yet)
+# - Subtotal: $1,600
+# - Contingency (10%): $160
+# - Total: $1,760
+
+## Example calculation verification:
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Test",
+    "days": 5,
+    "travelers": 2,
+    "budget": 2000.0,
+    "interests": ["testing"]
+  }' | python -m json.tool | grep -A 20 "cost_breakdown"
+
+# Check output:
+# "cost_breakdown": {
+#   "accommodation_cost": 800.0,
+#   "activity_cost": 0.0,
+#   "contingency_fund": 160.0,
+#   "meal_cost": 600.0,
+#   "subtotal": 1600.0,
+#   "total_cost": 1760.0,
+#   "transportation_cost": 200.0
+# }
+
+
+# ============================================================================
+# PART 8: EVALUATION SCORING VERIFICATION
+# ============================================================================
+
+## Budget Score (0-100):
+# - 100: Cost ≤ 80% of budget
+# - 85: Cost 80-90% of budget
+# - 70: Cost 90-100% of budget
+# - 50: Cost 100-110% of budget
+# - 0: Cost > 110% of budget
+
+## Preference Score (0-100):
+# - Based on activity categories matching interests
+# - No activities provided yet = 50 (neutral)
+
+## Activity Diversity Score (0-100):
+# - Based on number of unique categories
+# - No activities provided yet = 0
+
+## Overall Score = weighted average:
+# (budget × 0.30) + (preferences × 0.25) + (diversity × 0.10) +
+# (weather × 0.20) + (travel_efficiency × 0.15)
+
+
+# ============================================================================
+# PART 9: PYTHON IMPORT TESTING
+# ============================================================================
+
+## Test that all imports work correctly:
+
+python -c "from app.config import settings; print('✓ Config imports OK')"
+python -c "from app.database import db; print('✓ Database imports OK')"
+python -c "from app.models.trip import TripRequest; print('✓ Trip model imports OK')"
+python -c "from app.models.itinerary import Activity, DayPlan, Itinerary; print('✓ Itinerary models import OK')"
+python -c "from app.services.budget_engine import BudgetEngine; print('✓ BudgetEngine imports OK')"
+python -c "from app.services.evaluation import EvaluationService; print('✓ EvaluationService imports OK')"
+
+# Expected: All ✓ messages
+
+
+# ============================================================================
+# PART 10: DEBUGGING TIPS
+# ============================================================================
+
+## Enable debug logging in .env:
+# Set DEBUG=True in backend/.env
+
+## Check backend structure:
+ls backend/app/
+ls backend/app/models/
+ls backend/app/services/
+
+## Verify Python path:
+cd backend
+python -c "import sys; print(sys.path)"
+
+## Check installed packages:
+pip list | grep -E "pydantic|pymongo|fastapi|uvicorn"
+
+## Run backend with verbose logging:
+cd backend
+python -m uvicorn app.main:app --reload --log-level debug
+
+## Test import in Python REPL:
+cd backend
+python
+>>> from app.config import settings
+>>> print(settings.database_name)
+agentic_travel_planner
+>>> exit()
+
+
+# ============================================================================
+# PART 11: COMMON TEST SCENARIOS
+# ============================================================================
+
+## Scenario 1: Budget Backpacker
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Vietnam",
+    "days": 10,
+    "travelers": 1,
+    "budget": 800.0,
+    "interests": ["adventure", "culture", "nature"],
+    "max_daily_travel_minutes": 240
+  }'
+
+## Scenario 2: Luxury Travelers
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Maldives",
+    "days": 7,
+    "travelers": 2,
+    "budget": 15000.0,
+    "interests": ["luxury", "beaches", "relaxation", "dining"]
+  }'
+
+## Scenario 3: Large Group Adventure
+curl -X POST http://localhost:8000/api/trips/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination": "Iceland",
+    "days": 8,
+    "travelers": 6,
+    "budget": 12000.0,
+    "interests": ["nature", "adventure", "hiking", "photography"]
+  }'
+
+
+# ============================================================================
+# PART 12: API RESPONSE STRUCTURE REFERENCE
+# ============================================================================
+
+# Success response (200 OK) structure:
+{
+  "success": bool,
+  "message": str,
+  "trip_details": {
+    "destination": str,
+    "days": int,
+    "travelers": int,
+    "interests": [str],
+    "max_daily_travel_minutes": int
+  },
+  "budget_analysis": {
+    "user_budget": float,
+    "estimated_total": float,
+    "within_budget": bool,
+    "over_budget": bool,
+    "difference": float,
+    "percentage_used": float
+  },
+  "cost_breakdown": {
+    "meal_cost": float,
+    "accommodation_cost": float,
+    "transportation_cost": float,
+    "activity_cost": float,
+    "subtotal": float,
+    "contingency_fund": float,
+    "total_cost": float
+  },
+  "evaluation_scores": {
+    "budget_score": float,
+    "preference_score": float,
+    "activity_diversity_score": float,
+    "weather_score": float,
+    "travel_efficiency_score": float,
+    "overall_score": float
+  },
+  "recommendations": {
+    "needs_replan": bool,
+    "suggestions": [str]
+  }
+}
+
+# Error response (4xx/5xx) structure:
+{
+  "detail": str  # Error message
+}
