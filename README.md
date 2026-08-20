@@ -6,34 +6,47 @@ The current implementation supports live agent planning, INR-first budgeting, op
 
 ## Features
 
-- Natural-language trip planning through a LangGraph agent.
-- Day-wise travel plans with attractions, restaurants, activities, transportation, weather, and accommodation suggestions.
-- Deterministic hotel, meal, activity, transportation, and daily-budget calculations.
-- INR as the default currency with Indian number grouping such as `₹1,000.00` and `₹1,50,000.00`.
-- Currency conversion only when the user explicitly requests another currency.
-- Optional integrations for Groq, OpenWeatherMap, Google Places, Tavily, and ExchangeRate API.
-- FastAPI endpoints for health checks, trip validation, and agent queries.
-- Streamlit interface for interacting with the travel agent.
-- One cached LangGraph instance per process instead of rebuilding the graph per request.
-- Lightweight in-process caching for repeated weather, place-search, and currency requests.
-- Network timeouts and graceful fallbacks for optional external services.
-- Maximum of two tool or re-planning cycles per request.
-- Timing logs for LLM calls, tools, workflow execution, and total request duration.
+ -  Autonomous Agent Planning
+LangGraph-powered workflow with multi-step reasoning and tool orchestration
+Bounded execution: Maximum 2 tool cycles + 1 planning refinement to prevent infinite loops
+Intelligent fallbacks: Graceful degradation when external services are unavailable
+
+ - Deterministic Budget Engine
+INR-first currency system with proper Indian number formatting (₹1,00,000 vs $100,000)
+Real-time currency conversion only when explicitly requested
+Dynamic cost allocation: Hotel, meal, activity, and transport pricing based on destination and travel preferences
+Budget validation: Ensures recommendations stay within user constraints
+
+ - Multi-Source Data Integration
+Weather Intelligence: OpenWeatherMap integration with caching and timeout handling
+Venue Discovery: Google Places + Tavily dual-engine place search
+Currency Conversion: ExchangeRate API with INR short-circuit optimization
+Transport Logistics: Real-time feasibility checks with travel-time constraints
+
+ - Production-Grade Infrastructure
+Cached LangGraph Instances: One compiled graph per process eliminates per-request overhead
+Lightweight in-process caching: Deduplicates repeated weather, place, and currency requests
+Network resilience: Connection timeouts and exponential backoff for external APIs
+Optional MongoDB persistence: Works seamlessly in disconnected mode without degradation
+
+ - Observability & Debugging
+Comprehensive timing logs: LLM latency, tool execution, workflow duration, and total request time
+Structured logging: Request/response tracing for production debugging
+Health checks: Real-time database and service status monitoring
 
 ## Tech Stack
 
-| Technology | Role |
-|---|---|
-| Python 3.10+ | Application and business-logic language |
-| FastAPI | REST API and request validation surface |
-| Uvicorn | ASGI development server |
-| LangChain | LLM and tool abstractions |
-| LangGraph | Stateful agent workflow and tool execution |
-| Groq | Default LLM provider |
-| Pydantic | Request, response, and configuration validation |
-| Streamlit | Lightweight user interface |
-| MongoDB / PyMongo | Optional persistence foundation |
-| Requests / HTTPX | External API communication |
+| Category | Technology | Purpose |
+|---|---|---|
+| **Runtime** | Python 3.10+ | Core application language |
+| **API Framework** | FastAPI + Uvicorn | REST API and API documentation |
+| **Agent Engine** | LangGraph | Stateful agent workflow orchestration |
+| **LLM** | Groq | Fast LLM inference for agent reasoning |
+| **AI Framework** | LangChain | LLM and tool integrations |
+| **Validation** | Pydantic v2 | Data validation and serialization |
+| **UI** | Streamlit | Travel planning user interface |
+| **Storage** | MongoDB | Optional trip and user persistence |
+| **HTTP Clients** | Requests + HTTPX | External API communication |
 
 ## Architecture
 
@@ -81,7 +94,7 @@ The graph is bounded to one initial agent pass plus a maximum of two tool/re-pla
 ## Project Structure
 
 ```text
-AI_Trip_Planner-main/
+Agentic-Travel-Orchestrator/
 ├── agent/
 │   └── agentic_workflow.py       Cached LangGraph and workflow limits
 ├── backend/
@@ -129,7 +142,7 @@ AI_Trip_Planner-main/
 ### 1. Open the project
 
 ```powershell
-cd C:\Users\Admin\Downloads\AI_Trip_Planner-main
+cd "C:\Users\Admin\Downloads\Agentic Travel Orchestrator"
 ```
 
 ### 2. Activate the virtual environment
@@ -142,7 +155,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 If activation is unavailable, use the project interpreter directly:
 
 ```powershell
-C:\Users\Admin\Downloads\AI_Trip_Planner-main\.venv\Scripts\python.exe
+"C:\Users\Admin\Downloads\Agentic Travel Orchestrator\.venv\Scripts\python.exe"
 ```
 
 ### 3. Install dependencies
@@ -188,7 +201,7 @@ Use two PowerShell terminals and keep both open.
 Run from the `backend` directory:
 
 ```powershell
-cd C:\Users\Admin\Downloads\AI_Trip_Planner-main\backend
+cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator\backend
 ..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -203,7 +216,7 @@ http://127.0.0.1:8000
 Run from the project root, not from `backend`:
 
 ```powershell
-cd C:\Users\Admin\Downloads\AI_Trip_Planner-main
+cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator
 .\.venv\Scripts\python.exe -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
@@ -339,5 +352,26 @@ Invoke-RestMethod http://127.0.0.1:8000/api/trips/validate `
     -Method Post `
     -ContentType "application/json" `
     -Body $body
+
 ```
 
+## Future Enhancements
+
+- Multi-language support (English, Hindi, Spanish)
+- User preference learning (favorite destinations, repeat bookings)
+- Integration with booking platforms (hotel/flight reservations)
+- Real-time price tracking for flights and accommodations
+- Group trip splitting and collaborative planning
+- Carbon footprint estimation for eco-conscious travelers
+- Container deployment (Docker and Kubernetes manifests)
+- Batch processing for enterprise travel management
+
+## About
+
+Autonomous agent design with LangGraph
+Deterministic business logic separation
+Multi-service orchestration and resilience patterns
+Real-world constraint handling (budgets, time, availability)
+
+Author: Rishi Patel
+Repository: [rishipatel092005/Agentic-Travel-Orchestrator]
