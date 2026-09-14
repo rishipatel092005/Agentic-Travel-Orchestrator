@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Streamlit belongs to the backend/project root, not this frontend repository
+streamlit_app.py
