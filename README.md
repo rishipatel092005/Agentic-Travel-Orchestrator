@@ -7,9 +7,13 @@ The current implementation supports live agent planning, INR-first budgeting, op
 ## Features
 
  -Autonomous Agent Planning – LangGraph-powered workflow for multi-step reasoning, tool orchestration, and bounded execution.
+ 
  -Deterministic Budget Engine – INR-first cost calculation, expense breakdown, and budget constraint validation.
+ 
  -Multi-Source Travel Intelligence – Integrates weather, places, currency, and travel data APIs with caching and timeout handling.
+ 
  -Reliable AI Execution – Caching, timeouts, fallbacks, and controlled re-planning reduce redundant calls and improve resilience.
+ 
  -Evaluation & Observability – Itinerary scoring, constraint checks, latency tracking, structured logs, and health monitoring for reliable AI workflows.
 
 ## Tech Stack
