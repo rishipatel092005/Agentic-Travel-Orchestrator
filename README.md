@@ -26,7 +26,7 @@ The current implementation supports live agent planning, INR-first budgeting, op
 | **LLM** | Groq | Fast LLM inference for agent reasoning |
 | **AI Framework** | LangChain | LLM and tool integrations |
 | **Validation** | Pydantic v2 | Data validation and serialization |
-| **UI** | Streamlit | Travel planning user interface |
+| **UI** | Next.js + React + TypeScript | Travel planning user interface |
 | **Storage** | MongoDB | Optional trip and user persistence |
 | **HTTP Clients** | Requests + HTTPX | External API communication |
 
