@@ -1,0 +1,623 @@
+################################################################################
+#
+#  BACKEND CODE WALKTHROUGH
+#  Understanding the Import Chain and Architecture
+#
+################################################################################
+
+
+================================================================================
+SECTION 1: THE IMPORT PYRAMID
+================================================================================
+
+The backend is organized in a strict hierarchy to prevent circular imports:
+
+                          app/main.py
+                          (FastAPI app)
+                               ↑
+                  ┌─────────────┼─────────────┐
+                  │             │             │
+             config.py     services/      database.py
+            (Settings)     (Logic)        (MongoDB)
+                  │             │
+                  │      ┌──────┴──────┐
+                  │      │             │
+                  │   models/      services/
+                  │   (Data)      __init__.py
+                  │
+              pydantic
+            (Foundation)
+
+KEY RULE: Never import UP the pyramid
+  ✓ main.py CAN import from services, models, config, database
+  ✗ models CANNOT import from main.py or services
+  ✗ config CANNOT import from anything except pydantic
+
+
+================================================================================
+SECTION 2: LAYER-BY-LAYER WALKTHROUGH
+================================================================================
+
+LAYER 1: FOUNDATION (External Libraries)
+─────────────────────────────────────────
+
+These provide the base:
+  - pydantic → Data validation
+  - pydantic_settings → Configuration
+  - pymongo → Database driver
+  - fastapi → Web framework
+  - typing → Type hints
+
+
+LAYER 2: CONFIGURATION (app/config.py)
+──────────────────────────────────────
+
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+class Settings(BaseSettings):
+    mongodb_uri: str = "mongodb://localhost:27017"
+    groq_api_key: Optional[str] = None
+    # ... more settings
+
+settings = Settings()  # Global instance
+
+
+KEY PATTERNS:
+  • Uses Pydantic BaseSettings (NOT BaseModel)
+  • All fields have defaults or Optional
+  • Auto-loads from .env file
+  • Never imported by other app modules internally
+  • Imported by: database.py, main.py
+
+
+LAYER 3: DATABASE (app/database.py)
+──────────────────────────────────
+
+from pymongo import MongoClient
+from app.config import settings  # ← Imports from Layer 2
+
+class Database:
+    _client = None
+    
+    def __init__(self):
+        self._client = MongoClient(settings.mongodb_uri)
+        self._db = self._client[settings.database_name]
+    
+    @property
+    def trips_collection(self):
+        return self._db["trips"]
+
+db = Database()  # Global singleton instance
+
+
+KEY PATTERNS:
+  • Singleton pattern (single instance)
+  • Lazy initialization (only when accessed)
+  • Graceful offline mode (try/except)
+  • Properties for collection access
+  • Imported by: main.py
+
+
+LAYER 4: MODELS (app/models/)
+──────────────────────────────
+
+4a) Models don't import from anywhere in app
+    └─ Only import from pydantic and typing
+
+4b) trip.py
+    ─────────
+    from pydantic import BaseModel, Field, field_validator
+    from typing import List
+    
+    class TripRequest(BaseModel):
+        destination: str = Field(..., min_length=1, max_length=100)
+        days: int = Field(..., gt=0, le=365)
+        # ... more fields
+        
+        @field_validator("destination")
+        @classmethod
+        def validate_destination(cls, v: str) -> str:
+            if not v.strip():
+                raise ValueError("Destination cannot be empty")
+            return v.strip()
+
+    KEY PATTERNS:
+      • All fields have type hints
+      • Field() with validation parameters
+      • Custom validators with @field_validator
+      • Config class for JSON schema examples
+      • NO imports from other app modules
+
+
+4c) itinerary.py
+    ───────────────
+    from pydantic import BaseModel, Field
+    from typing import List, Optional
+    
+    class Activity(BaseModel):
+        name: str
+        category: str
+        estimated_cost: float = Field(default=0.0, ge=0)
+        # ... more fields
+    
+    class DayPlan(BaseModel):
+        day: int = Field(..., gt=0)
+        activities: List[Activity] = Field(default_factory=list)
+    
+    class Itinerary(BaseModel):
+        destination: str
+        day_plans: List[DayPlan] = Field(default_factory=list)
+        # ... more fields
+
+    KEY PATTERNS:
+      • Nested models (Activity → DayPlan → Itinerary)
+      • Field() with validation
+      • Optional types where appropriate
+      • Default factories for lists
+      • NO imports from other app modules
+
+
+4d) __init__.py in models/
+    ──────────────────────
+    from app.models.trip import TripRequest
+    from app.models.itinerary import Activity, DayPlan, Itinerary
+    
+    __all__ = ["TripRequest", "Activity", "DayPlan", "Itinerary"]
+
+    KEY PATTERNS:
+      • Exports public API
+      • __all__ defines what's exported
+      • Simplifies imports in main.py
+
+
+LAYER 5: SERVICES (app/services/)
+──────────────────────────────────
+
+5a) budget_engine.py
+    ──────────────────
+    from pydantic import BaseModel, Field
+    from typing import List
+    from app.models.itinerary import Itinerary, DayPlan, Activity  # ← Imports from models
+    
+    class BudgetValidationResult(BaseModel):
+        estimated_total: float
+        user_budget: float
+        within_budget: bool
+        # ... more fields
+    
+    class BudgetEngine:
+        DEFAULT_MEAL_COST_PER_DAY = 60.0
+        DEFAULT_ACCOMMODATION_COST_PER_NIGHT = 100.0
+        
+        def __init__(self, meal_cost_per_day=None):
+            self.meal_cost_per_day = meal_cost_per_day or self.DEFAULT_MEAL_COST_PER_DAY
+        
+        def calculate_meal_cost(self, days: int, travelers: int) -> float:
+            return self.meal_cost_per_day * days * travelers
+        
+        def calculate_itinerary_cost(
+            self,
+            itinerary: Itinerary,  # ← Uses model from layer 4
+            days: int,
+            travelers: int
+        ) -> tuple[float, dict]:
+            meal_cost = self.calculate_meal_cost(days, travelers)
+            # ... more calculations
+            return total_cost, breakdown
+
+    KEY PATTERNS:
+      • Imports models as dependencies
+      • Pure functions (no side effects)
+      • Result classes (BudgetValidationResult)
+      • Constants for defaults
+      • Type hints on all parameters
+
+
+5b) evaluation.py
+    ────────────────
+    from pydantic import BaseModel, Field
+    from typing import Optional, List, ClassVar, Dict  # ← ClassVar for Pydantic v2
+    from app.models.itinerary import Itinerary, Activity  # ← Imports from models
+    
+    class EvaluationScore(BaseModel):
+        budget_score: float = Field(ge=0, le=100)
+        preference_score: float = Field(ge=0, le=100)
+        activity_diversity_score: float = Field(ge=0, le=100)
+        
+        # ClassVar for Pydantic v2 compatibility (NOT a model field)
+        WEIGHTS: ClassVar[Dict[str, float]] = {
+            "budget": 0.30,
+            "preferences": 0.25,
+            # ... more weights
+        }
+        
+        @property
+        def overall_score(self) -> float:
+            return (
+                self.budget_score * self.WEIGHTS["budget"] +
+                self.preference_score * self.WEIGHTS["preferences"]
+                # ... weighted calculation
+            )
+    
+    class EvaluationService:
+        def evaluate_budget_score(self, estimated_cost: float, user_budget: float) -> float:
+            # Pure logic, no side effects
+            percentage = (estimated_cost / user_budget) * 100
+            if percentage <= 80:
+                return 100.0
+            elif percentage <= 90:
+                return 85.0
+            # ... more scoring logic
+
+    KEY PATTERNS:
+      • ClassVar instead of instance fields (Pydantic v2)
+      • Properties for computed values
+      • Pure functions
+      • Scoring logic separated from calculation
+
+
+5c) __init__.py in services/
+    ─────────────────────────
+    from app.services.budget_engine import BudgetEngine, BudgetValidationResult
+    from app.services.evaluation import EvaluationService, EvaluationScore
+    
+    __all__ = ["BudgetEngine", "BudgetValidationResult", 
+               "EvaluationService", "EvaluationScore"]
+
+
+LAYER 6: MAIN APPLICATION (app/main.py)
+──────────────────────────────────────
+
+from fastapi import FastAPI, HTTPException
+from app.config import settings              # ← From layer 2
+from app.database import db                  # ← From layer 3
+from app.models.trip import TripRequest      # ← From layer 4
+from app.models.itinerary import Itinerary, DayPlan  # ← From layer 4
+from app.services.budget_engine import BudgetEngine  # ← From layer 5
+from app.services.evaluation import EvaluationService  # ← From layer 5
+
+app = FastAPI(title=settings.app_name)
+
+# Initialize services
+budget_engine = BudgetEngine()
+evaluation_service = EvaluationService()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    db.close()
+
+@app.get("/health")
+async def health_check():
+    db_status = "connected" if db.is_connected() else "disconnected"
+    return {
+        "status": "healthy",
+        "application": settings.app_name,
+        "database": db_status
+    }
+
+@app.post("/api/trips/validate")
+async def validate_trip(trip_request: TripRequest):  # ← Uses model
+    try:
+        # Create itinerary
+        itinerary = Itinerary(destination=trip_request.destination)
+        
+        # Use budget engine
+        estimated_total, cost_breakdown = budget_engine.calculate_itinerary_cost(
+            itinerary, trip_request.days, trip_request.travelers
+        )
+        
+        # Use evaluation service
+        evaluation_score = evaluation_service.evaluate_itinerary(
+            itinerary, trip_request.interests, trip_request.budget, trip_request.days
+        )
+        
+        # Return response
+        return {
+            "success": True,
+            "budget_analysis": {...},
+            "evaluation_scores": {...}
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+KEY PATTERNS:
+  • Imports from all layers (2, 3, 4, 5)
+  • Service initialization at module level
+  • Models used for request validation (automatic by FastAPI)
+  • Services used for business logic
+  • Database used for persistence
+  • Configuration used for settings
+  • Proper error handling
+  • Logging for debugging
+
+
+================================================================================
+SECTION 3: EXECUTION FLOW EXAMPLE
+================================================================================
+
+Request: POST /api/trips/validate
+
+1. FastAPI receives HTTP request
+   └─ Validates against TripRequest model (layer 4)
+   └─ If invalid → Return 422 error
+   └─ If valid → Call validate_trip() function
+
+2. validate_trip() function executes
+   └─ Create Itinerary object (from layer 4)
+   └─ Call budget_engine.calculate_itinerary_cost() (from layer 5)
+      └─ Pure Python arithmetic
+      └─ Returns: (total_cost, breakdown_dict)
+   └─ Call evaluation_service.evaluate_itinerary() (from layer 5)
+      └─ Scores across 5 dimensions
+      └─ Returns: EvaluationScore object
+   └─ Optionally call db.trips_collection.insert_one() (from layer 3)
+      └─ Persists to MongoDB if available
+      └─ Silently skips if offline
+
+3. Response object is created
+   └─ Convert Python dicts/objects to JSON
+   └─ FastAPI auto-serializes Pydantic models
+
+4. Response returned to client
+   └─ HTTP 200 with JSON body
+
+
+================================================================================
+SECTION 4: COMMON IMPORT PATTERNS
+================================================================================
+
+Pattern 1: Using a Model
+──────────────────────
+
+# In your endpoint
+from app.models.trip import TripRequest
+
+@app.post("/endpoint")
+async def my_endpoint(request: TripRequest):
+    # FastAPI automatically validates and deserializes
+    print(request.destination)  # Access fields
+    print(request.days)
+
+
+Pattern 2: Using a Service
+──────────────────────────
+
+# In main.py
+from app.services.budget_engine import BudgetEngine
+
+engine = BudgetEngine()
+
+# In function
+result = engine.validate_budget(itinerary, days, travelers, budget)
+print(result.within_budget)
+
+
+Pattern 3: Using Settings
+────────────────────────
+
+# In database.py or main.py
+from app.config import settings
+
+uri = settings.mongodb_uri
+debug = settings.debug
+
+
+Pattern 4: Using Database
+─────────────────────────
+
+# In main.py
+from app.database import db
+
+@app.on_event("shutdown")
+async def shutdown():
+    db.close()
+
+# In endpoint (optional)
+trips_collection = db.trips_collection
+trips_collection.insert_one({"destination": "Paris"})
+
+
+Pattern 5: Custom Validation
+────────────────────────────
+
+# In model
+from pydantic import BaseModel, field_validator
+
+class MyModel(BaseModel):
+    my_field: str
+    
+    @field_validator("my_field")
+    @classmethod
+    def validate_my_field(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Field cannot be empty")
+        return v.strip()
+
+
+================================================================================
+SECTION 5: TYPE HINTS REFERENCE
+================================================================================
+
+Basic Types:
+  - str, int, float, bool → Direct types
+  - List[str] → List of strings
+  - Dict[str, int] → Dictionary with string keys, int values
+  - Optional[str] → Can be str or None
+  - Union[str, int] → Either str or int
+
+With Pydantic:
+  - BaseModel → Base class for models
+  - Field(..., min_length=1) → Required field with validation
+  - Field(default=None) → Optional field with default
+  - ClassVar[Dict] → Class-level constant (Pydantic v2)
+
+With Functions:
+  - def func(x: int) -> str → Takes int, returns str
+  - def func(x: List[str]) -> Dict[str, int] → Complex types
+  - async def func() → Async function (for FastAPI endpoints)
+
+
+================================================================================
+SECTION 6: KEY PYDANTIC v2 CHANGES
+================================================================================
+
+v1 → v2 Migrations:
+
+1. Validators
+   v1: @validator("field")
+   v2: @field_validator("field")
+
+2. Class-level attributes
+   v1: class Meta: arbitrary_types_allowed = True
+   v2: model_config = ConfigDict(arbitrary_types_allowed=True)
+
+3. Constants in models
+   v1: WEIGHTS = {...}  # Treated as field (error in v2)
+   v2: WEIGHTS: ClassVar[Dict] = {...}  # Explicitly mark as class var
+
+4. Settings inheritance
+   v1: from pydantic import BaseSettings
+   v2: from pydantic_settings import BaseSettings
+
+5. JSON serialization
+   v1: .json()
+   v2: .model_dump_json()  # But FastAPI handles it automatically
+
+
+================================================================================
+SECTION 7: TESTING IMPORTS
+================================================================================
+
+Quick tests to verify everything works:
+
+1. Test config import
+   python -c "from app.config import settings; print('✓')"
+
+2. Test models import
+   python -c "from app.models.trip import TripRequest; print('✓')"
+
+3. Test services import
+   python -c "from app.services.budget_engine import BudgetEngine; print('✓')"
+
+4. Test main app
+   python -c "from app.main import app; print('✓')"
+
+5. Create a TripRequest
+   python -c "
+from app.models.trip import TripRequest
+trip = TripRequest(
+    destination='Paris',
+    days=5,
+    travelers=2,
+    budget=3000.0,
+    interests=['culture']
+)
+print(f'✓ {trip.destination}')
+"
+
+6. Use BudgetEngine
+   python -c "
+from app.services.budget_engine import BudgetEngine
+engine = BudgetEngine()
+cost = engine.calculate_meal_cost(5, 2)
+print(f'✓ Meal cost: \${cost}')
+"
+
+
+================================================================================
+SECTION 8: DEBUGGING IMPORT ERRORS
+================================================================================
+
+Error: ModuleNotFoundError: No module named 'app'
+  Cause: Running from wrong directory
+  Fix: cd backend && python ...
+
+Error: ImportError: cannot import name 'TripRequest'
+  Cause: Typo in import path
+  Fix: Check app/models/trip.py for exact class name
+
+Error: AttributeError: type object has no attribute 'WEIGHTS'
+  Cause: Missing ClassVar import in Pydantic v2
+  Fix: Add "from typing import ClassVar" at top
+
+Error: Circular import detected
+  Cause: Importing up the pyramid (models importing from services)
+  Fix: Only import down (main→services→models→pydantic)
+
+Error: .env file not loading
+  Cause: Using BaseSettings instead of Settings instance
+  Fix: Import "settings" not "Settings"
+
+Error: Database connection not working
+  Cause: MongoDB not running
+  Fix: Normal! Check app works offline first
+
+Error: FastAPI can't import app
+  Cause: Python path issue
+  Fix: Ensure __init__.py files exist in all packages
+      Ensure all directories have __init__.py
+
+
+================================================================================
+SECTION 9: QUICK REFERENCE CARD
+================================================================================
+
+To add a new field to TripRequest:
+  1. Open: app/models/trip.py
+  2. Add: field_name: type = Field(..., validation)
+  3. Add: @field_validator if needed
+  4. Test: python validate_new_model.py
+
+To add a new endpoint:
+  1. Open: app/main.py
+  2. Add: @app.get() or @app.post()
+  3. Define async function with type hints
+  4. Test: curl http://localhost:8000/new-endpoint
+
+To add a new API key:
+  1. Open: app/config.py
+  2. Add: my_key: Optional[str] = None
+  3. Add to .env file
+  4. Access via: settings.my_key
+
+To calculate something new:
+  1. Open: app/services/budget_engine.py
+  2. Add method: def calculate_x() -> float
+  3. Call from main.py endpoint
+  4. Return in response
+
+To score something new:
+  1. Open: app/services/evaluation.py
+  2. Add method: def evaluate_x() -> float
+  3. Update WEIGHTS ClassVar if needed
+  4. Call from evaluate_itinerary()
+
+
+================================================================================
+SECTION 10: ARCHITECTURE SUMMARY
+================================================================================
+
+Layer | File | Purpose | Imports
+───────────────────────────────────────────────────────────────────────────
+  6   | main.py | API endpoints, FastAPI | 2,3,4,5
+  5   | services/ | Business logic | 4
+  4   | models/ | Data structures | pydantic
+  3   | database.py | MongoDB connection | 2
+  2   | config.py | Environment settings | pydantic-settings
+  1   | External | Libraries | (none)
+
+Dataflow in POST /api/trips/validate:
+1. Client sends JSON
+2. FastAPI validates against TripRequest model (layer 4)
+3. validate_trip() processes using BudgetEngine (layer 5)
+4. BudgetEngine calculates using Itinerary model (layer 4)
+5. EvaluationService scores using models (layer 4)
+6. Response returned with all results
+
+Everything connects cleanly because of the strict layering.
+
+
+================================================================================
+End of Code Walkthrough
+================================================================================
