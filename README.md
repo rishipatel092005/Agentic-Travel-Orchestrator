@@ -6,34 +6,15 @@ The current implementation supports live agent planning, INR-first budgeting, op
 
 ## Features
 
- -  Autonomous Agent Planning : 
-LangGraph-powered workflow with multi-step reasoning and tool orchestration
-Bounded execution: Maximum 2 tool cycles + 1 planning refinement to prevent infinite loops
-Intelligent fallbacks: Graceful degradation when external services are unavailable
+ - **Autonomous Agent Planning:** LangGraph-powered workflow for multi-step reasoning, tool orchestration, bounded execution, planning refinement, and graceful fallbacks.
 
- - Deterministic Budget Engine : 
-INR-first currency system with proper Indian number formatting (₹1,00,000 vs $100,000)
-Real-time currency conversion only when explicitly requested
-Dynamic cost allocation: Hotel, meal, activity, and transport pricing based on destination and travel preferences
-Budget validation: Ensures recommendations stay within user constraints
+- **Deterministic Budget Engine:** INR-first budgeting with Indian number formatting, dynamic hotel/meal/activity/transport costs, optional currency conversion, and budget constraint                                         validation.
 
- - Multi-Source Data Integration : 
-Weather Intelligence: OpenWeatherMap integration with caching and timeout handling
-Venue Discovery: Google Places + Tavily dual-engine place search
-Currency Conversion: ExchangeRate API with INR short-circuit optimization
-Transport Logistics: Real-time feasibility checks with travel-time constraints
+- **Multi-Source Data Integration:** Integrates weather, places, currency, and transport intelligence using external APIs with caching, timeout handling, and feasibility checks.
 
- - Production-Grade Infrastructure : 
-Cached LangGraph Instances: One compiled graph per process eliminates per-request overhead
-Lightweight in-process caching: Deduplicates repeated weather, place, and currency requests
-Network resilience: Connection timeouts and exponential backoff for external APIs
-Optional MongoDB persistence: Works seamlessly in disconnected mode without degradation
+- **Production-Grade Infrastructure:** Uses cached LangGraph instances, lightweight request caching, connection timeouts, exponential backoff, and optional MongoDB persistence for                                                resilient operation.
 
- - Observability & Debugging: 
-Comprehensive timing logs: LLM latency, tool execution, workflow duration, and total request time
-Structured logging: Request/response tracing for production debugging
-Health checks: Real-time database and service status monitoring
-
+- **Observability & Debugging:** Tracks LLM latency, tool execution time, workflow duration, structured request logs, service health, and database status for easier debugging and                                           monitoring.
 ## Tech Stack
 
 | Category | Technology | Purpose |
