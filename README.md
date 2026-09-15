@@ -106,7 +106,13 @@ Agentic-Travel-Orchestrator/
 │   ├── currency_converter.py     Currency client and INR short-circuit
 │   └── expense_calculator.py     Arithmetic helpers and INR formatting
 ├── main.py                       Existing root FastAPI application
-├── streamlit_app.py              Streamlit frontend
+├── frontend/
+│   ├── app/                      Next.js pages and routes
+│   ├── components/               Reusable UI components
+│   ├── hooks/                    React state and custom hooks
+│   ├── lib/                      API and utility functions
+│   ├── types/                    TypeScript types
+│   └── public/                    Static assets
 ├── requirements.txt              Python dependencies
 ├── .env.example                  Environment-variable template
 └── README.md                     Project documentation
