@@ -1,20 +1,38 @@
 # Agentic Travel Planner
 
-An AI-powered travel planning application that turns a natural-language trip request into a structured itinerary with activities, weather context, transportation suggestions, and cost estimates. The project combines a LangGraph tool-using agent with deterministic Python business logic for budget calculations and a FastAPI plus Streamlit application surface.
+An AI-powered travel planning application that turns a natural-language trip request into a structured itinerary with activities, weather context, transportation suggestions, and cost estimates. The project combines a LangGraph tool-using agent with deterministic Python business logic for budget calculations, a FastAPI API, and a Next.js + React + TypeScript frontend.
 
 The current implementation supports live agent planning, INR-first budgeting, optional external travel APIs, bounded workflow execution, lightweight caching, and graceful operation when MongoDB is unavailable.
 
 ## Features
 
- >Autonomous Agent Planning – LangGraph-powered workflow for multi-step reasoning, tool orchestration, and bounded execution.
- 
- >Deterministic Budget Engine – INR-first cost calculation, expense breakdown, and budget constraint validation.
- 
- >Multi-Source Travel Intelligence – Integrates weather, places, currency, and travel data APIs with caching and timeout handling.
- 
- >Reliable AI Execution – Caching, timeouts, fallbacks, and controlled re-planning reduce redundant calls and improve resilience.
- 
- >Evaluation & Observability – Itinerary scoring, constraint checks, latency tracking, structured logs, and health monitoring for reliable AI workflows.
+ -  Autonomous Agent Planning : 
+LangGraph-powered workflow with multi-step reasoning and tool orchestration
+Bounded execution: Maximum 2 tool cycles + 1 planning refinement to prevent infinite loops
+Intelligent fallbacks: Graceful degradation when external services are unavailable
+
+ - Deterministic Budget Engine : 
+INR-first currency system with proper Indian number formatting (₹1,00,000 vs $100,000)
+Real-time currency conversion only when explicitly requested
+Dynamic cost allocation: Hotel, meal, activity, and transport pricing based on destination and travel preferences
+Budget validation: Ensures recommendations stay within user constraints
+
+ - Multi-Source Data Integration : 
+Weather Intelligence: OpenWeatherMap integration with caching and timeout handling
+Venue Discovery: Google Places + Tavily dual-engine place search
+Currency Conversion: ExchangeRate API with INR short-circuit optimization
+Transport Logistics: Real-time feasibility checks with travel-time constraints
+
+ - Production-Grade Infrastructure : 
+Cached LangGraph Instances: One compiled graph per process eliminates per-request overhead
+Lightweight in-process caching: Deduplicates repeated weather, place, and currency requests
+Network resilience: Connection timeouts and exponential backoff for external APIs
+Optional MongoDB persistence: Works seamlessly in disconnected mode without degradation
+
+ - Observability & Debugging: 
+Comprehensive timing logs: LLM latency, tool execution, workflow duration, and total request time
+Structured logging: Request/response tracing for production debugging
+Health checks: Real-time database and service status monitoring
 
 ## Tech Stack
 
@@ -34,7 +52,7 @@ The current implementation supports live agent planning, INR-first budgeting, op
 
 ```mermaid
 flowchart TD
-    User[User] --> UI[Streamlit UI]
+    User[User] --> UI[Next.js + React UI]
     UI --> API[FastAPI API]
 
     API --> Cache[In-Process Cache]
@@ -63,8 +81,8 @@ flowchart TD
 
 ### Request flow
 
-1. The user submits a natural-language request in Streamlit.
-2. Streamlit sends the request to `POST /query`.
+1. The user submits a natural-language request in the Next.js frontend.
+2. The frontend sends the request to `POST /query`.
 3. FastAPI reuses the process-level compiled LangGraph.
 4. The LLM decides whether a tool is needed.
 5. External tools fetch only the information requested by the workflow.
@@ -105,14 +123,17 @@ Agentic-Travel-Orchestrator/
 │   ├── place_info_search.py      Place clients with lightweight caching
 │   ├── currency_converter.py     Currency client and INR short-circuit
 │   └── expense_calculator.py     Arithmetic helpers and INR formatting
+├── frontend/                     Next.js + React + TypeScript frontend
+│   ├── app/                      App Router pages and routes
+│   ├── components/               Layout, planner, chat, itinerary, and shared UI
+│   ├── hooks/                    Frontend state and API workflow hooks
+│   ├── lib/                      API and download utilities
+│   ├── public/                   Static frontend assets
+│   ├── types/                    Shared TypeScript models
+│   ├── package.json              Frontend dependencies and scripts
+│   └── next.config.ts            Next.js configuration
 ├── main.py                       Existing root FastAPI application
-├── frontend/
-│   ├── app/                      Next.js pages and routes
-│   ├── components/               Reusable UI components
-│   ├── hooks/                    React state and custom hooks
-│   ├── lib/                      API and utility functions
-│   ├── types/                    TypeScript types
-│   └── public/                    Static assets
+├── streamlit_app.py              Legacy Streamlit application (ignored by frontend Git rules)
 ├── requirements.txt              Python dependencies
 ├── .env.example                  Environment-variable template
 └── README.md                     Project documentation
@@ -186,10 +207,10 @@ Use two PowerShell terminals and keep both open.
 
 ### Next.js frontend
 
-Run from the repository root:
+Run from the repository's `frontend` directory:
 
 ```powershell
-cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator\frontend
+cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator\frontend\frontend
 npm install
 npm run dev
 ```
@@ -200,13 +221,13 @@ Frontend URL:
 http://localhost:3000
 ```
 
-### Terminal 1: FastAPI backend
+### FastAPI backend
 
-Run from the `backend` directory:
+Run from the repository root:
 
 ```powershell
-cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator\backend
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator\frontend
+..\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 Backend URL:
@@ -215,9 +236,9 @@ Backend URL:
 http://127.0.0.1:8000
 ```
 
-### Terminal 2: Streamlit frontend
+### Legacy Streamlit frontend
 
-Run from the project root, not from `backend`:
+The Streamlit app is retained for compatibility but is not the primary UI. Run it only when needed:
 
 ```powershell
 cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator
@@ -227,12 +248,12 @@ cd C:\Users\Admin\Downloads\Agentic Travel Orchestrator
 Frontend URL:
 
 ```text
-http://127.0.0.1:8501
+http://localhost:3000
 ```
 
 ## Usage
 
-1. Open `http://127.0.0.1:8501`.
+1. Open `http://localhost:3000`.
 2. Enter a request such as:
 
    ```text
@@ -259,7 +280,7 @@ The repository currently does not contain a deployed public demo URL. Add a veri
 
 For a polished GitHub presentation, capture these real screens after running the project:
 
-1. Streamlit trip request screen.
+1. Next.js trip request screen.
 2. Generated itinerary with day-wise activities.
 3. Budget breakdown and within-budget result.
 4. FastAPI Swagger page at `/docs`.
